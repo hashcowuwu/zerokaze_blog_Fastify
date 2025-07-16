@@ -1,14 +1,7 @@
 // src/modules/admin/admin.service.ts
-import { Pool } from "pg";
-
-// 假设你已经配置好了数据库连接池
-const pool = new Pool({
-  user: "your_db_user",
-  host: "your_db_host",
-  database: "your_db_name",
-  password: "your_db_password",
-  port: 5432, // 默认 PostgreSQL 端口
-});
+import { FastifyInstance } from "fastify";
+import bcrypt from "bcrypt";
+import { SALT_ROUNDS } from "../../config/auth";
 
 interface User {
   id: number;
@@ -22,7 +15,7 @@ interface User {
 interface CreateUserInput {
   username: string;
   email: string;
-  password_hash: string; // 控制器中需要对密码进行哈希处理
+  password_hash?: string; // 可选，因为可能没有密码
   role?: string;
 }
 
@@ -34,9 +27,19 @@ interface UpdateUserInput {
 }
 
 export class AdminService {
+  private db: FastifyInstance["pg"];
+
+  constructor(db?: FastifyInstance["pg"]) {
+    this.db = db!;
+  }
+
+  setDatabase(db: FastifyInstance["pg"]) {
+    this.db = db;
+  }
+
   async getAllUsers(): Promise<User[]> {
     try {
-      const result = await pool.query<User>(
+      const result = await this.db.query<User>(
         "SELECT id, username, email, created_at, updated_at, role FROM users",
       );
       return result.rows;
@@ -49,12 +52,12 @@ export class AdminService {
   async createUser(userData: CreateUserInput): Promise<User> {
     const { username, email, password_hash, role } = userData;
     try {
-      const result = await pool.query<User>(
+      const result = await this.db.query<User>(
         "INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, created_at, updated_at, role",
         [username, email, password_hash, role],
       );
       return result.rows[0];
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating user:", error);
       if (error.code === "23505") {
         // Unique violation error code (username or email already exists)
@@ -66,7 +69,7 @@ export class AdminService {
 
   async getUserById(id: number): Promise<User | null> {
     try {
-      const result = await pool.query<User>(
+      const result = await this.db.query<User>(
         "SELECT id, username, email, created_at, updated_at, role FROM users WHERE id = $1",
         [id],
       );
@@ -107,9 +110,9 @@ export class AdminService {
     values.push(id);
 
     try {
-      const result = await pool.query<User>(query, values);
+      const result = await this.db.query<User>(query, values);
       return result.rows[0] || null;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating user:", error);
       if (error.code === "23505") {
         throw new Error("Username or email already exists");
@@ -120,8 +123,10 @@ export class AdminService {
 
   async deleteUser(id: number): Promise<boolean> {
     try {
-      const result = await pool.query("DELETE FROM users WHERE id = $1", [id]);
-      return result.rowCount > 0;
+      const result = await this.db.query("DELETE FROM users WHERE id = $1", [
+        id,
+      ]);
+      return result.rowCount! > 0;
     } catch (error) {
       console.error("Error deleting user:", error);
       throw new Error("Failed to delete user from the database");

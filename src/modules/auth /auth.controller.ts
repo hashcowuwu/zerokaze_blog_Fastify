@@ -7,7 +7,6 @@ import {
   generateToken,
 } from "./auth.service";
 import { RegisterBodyType, LoginBodyType } from "./auth.schema";
-import cookie, { FastifyCookieOptions } from "@fastify/cookie";
 
 export async function registerHandler(
   request: FastifyRequest<{ Body: RegisterBodyType }>,
@@ -51,6 +50,10 @@ export async function loginHandler(
       username,
       request.server.pg,
     );
+
+    // 添加第一行日志：检查是否找到了用户
+    console.log("查询到的用户:", user);
+
     if (!user) {
       return reply.status(401).send({ message: "无效的用户名或密码" });
     }
@@ -59,29 +62,34 @@ export async function loginHandler(
       password,
       user.password_hash,
     );
+
+    // 添加第二行日志：检查密码是否有效
+    console.log("密码是否有效:", isPasswordValid);
+
     if (!isPasswordValid) {
       return reply.status(401).send({ message: "无效的用户名或密码" });
     }
 
+    // ... 后续代码保持不变 ...
     const token = generateToken(
       { id: user.id, username: user.username, email: user.email },
       request.server.jwt,
     );
-    console.log("About to set authToken cookie:", token);
 
-    reply
-      .setCookie("authToken", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        path: "/",
-      })
-      .send({
-        token,
-        user: { id: user.id, username: user.username, email: user.email },
-      });
+    reply.setCookie("authToken", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return reply.status(200).send({
+      message: "Login successful",
+      user: { id: user.id, username: user.username, email: user.email },
+    });
   } catch (error) {
     console.error("登录失败:", error);
-    reply.status(500).send({ message: "登录失败" });
+    return reply.status(500).send({ message: "登录失败" });
   }
 }

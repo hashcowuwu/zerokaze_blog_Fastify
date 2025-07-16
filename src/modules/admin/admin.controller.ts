@@ -1,14 +1,17 @@
 // src/modules/admin/admin.controller.ts
 import { FastifyRequest, FastifyReply } from "fastify";
 import { AdminService } from "./admin.service";
+import bcrypt from "bcrypt";
+import { SALT_ROUNDS } from "../../config/auth";
 
-const adminService = new AdminService();
+// AdminService 实例将在每个处理函数中动态创建
 
 export const getUsersHandler = async (
   request: FastifyRequest,
   reply: FastifyReply,
 ) => {
   try {
+    const adminService = new AdminService(request.server.pg);
     const users = await adminService.getAllUsers();
     reply.send(users);
   } catch (error: any) {
@@ -26,9 +29,13 @@ export const createUserHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    // **重要**: 在这里你需要对用户的密码进行哈希处理
-    const password_hash = "hashed_password_placeholder"; // 实际应用中需要使用 bcrypt 或 Argon2 等库进行哈希
-    const userData = { ...request.body, password_hash };
+    // 对用户的密码进行哈希处理
+    const { password, ...otherData } = request.body;
+    const password_hash = password
+      ? await bcrypt.hash(password, SALT_ROUNDS)
+      : undefined;
+    const userData = { ...otherData, password_hash };
+    const adminService = new AdminService(request.server.pg);
     const newUser = await adminService.createUser(userData);
     reply.status(201).send(newUser);
   } catch (error: any) {
@@ -53,8 +60,14 @@ export const updateUserHandler = async (
 ) => {
   try {
     const { id } = request.params;
-    // **注意**: 如果请求中包含新密码，你需要在这里对其进行哈希处理
-    const userData = request.body;
+    // 如果请求中包含新密码，对其进行哈希处理
+    const { password, ...otherData } = request.body;
+    let userData = otherData;
+    if (password) {
+      const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
+      userData = { ...otherData, password_hash };
+    }
+    const adminService = new AdminService(request.server.pg);
     const updatedUser = await adminService.updateUser(parseInt(id), userData);
     if (updatedUser) {
       reply.send(updatedUser);
@@ -75,6 +88,7 @@ export const deleteUserHandler = async (
 ) => {
   try {
     const { id } = request.params;
+    const adminService = new AdminService(request.server.pg);
     const success = await adminService.deleteUser(parseInt(id));
     if (success) {
       reply.status(204).send();
@@ -89,15 +103,8 @@ export const deleteUserHandler = async (
   }
 };
 
-interface CustomRequest extends FastifyRequest {
-  user?: {
-    id: number;
-    username: string;
-  };
-}
-
 export const getDashboardHandler = async (
-  request: CustomRequest,
+  request: FastifyRequest,
   reply: FastifyReply,
 ) => {
   try {

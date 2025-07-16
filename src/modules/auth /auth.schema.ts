@@ -49,7 +49,7 @@ const LoginBody = Type.Object({
 export type LoginBodyType = Static<typeof LoginBody>;
 
 const LoginResponse200 = Type.Object({
-  token: Type.String(),
+  // token: Type.String(),
   user: Type.Object({
     id: Type.Number(),
     username: Type.String(),

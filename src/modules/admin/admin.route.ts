@@ -22,7 +22,7 @@ const adminRoutes: FastifyPluginCallback = async (fastify, options) => {
   // 需要鉴权的后台管理路由，应用 authenticate 钩子
   fastify.addHook("preHandler", authenticate);
 
-  fastify.get("/dashboard", getDashboardHandler); // 访问后台首页/仪表盘
+  fastify.post("/dashboard", getDashboardHandler); // 访问后台首页/仪表盘
   fastify.get("/users", getUsersHandler); // 获取用户列表
   fastify.post("/users", { schema: createUserSchema }, createUserHandler); // 创建新用户
   fastify.put("/users/:id", { schema: updateUserSchema }, updateUserHandler); // 更新用户信息，需要用户 ID 参数

@@ -1,18 +1,43 @@
+// src/plugins/auth.ts (保持这个版本)
+
+import { FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
-import jwt, { FastifyJWT } from "@fastify/jwt";
-import { FastifyInstance } from "fastify";
-import { JWT_SECRET } from "../config/auth";
 
-export default fp(async function (fastify: FastifyInstance, opts: {}) {
-  fastify.register(jwt, {
-    secret: JWT_SECRET,
-  });
+// 用户 payload 类型定义
+export interface UserPayload {
+  id: number;
+  username: string;
+  email: string;
+  iat: number;
+  exp: number;
+}
 
-  fastify.decorate("$jwt", fastify.jwt); // 将装饰器名称更改为 '$jwt'
-});
-
+// 扩展 FastifyRequest 类型
 declare module "fastify" {
-  interface FastifyInstance {
-    $jwt: FastifyJWT; // 更新类型声明以匹配新的装饰器名称
+  interface FastifyRequest {
+    user: UserPayload;
   }
 }
+
+// 认证钩子函数
+export async function authenticate(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  try {
+    // 这里的 jwtVerify 依赖于你在 app.ts 中注册的 @fastify/jwt
+    await request.jwtVerify();
+  } catch (err) {
+    reply.log.warn("JWT Authentication failed", err);
+    reply.code(401).send({ message: "Unauthorized" });
+  }
+}
+
+// fastify 插件，用于添加 server.authenticate
+async function authPlugin(fastify: any) {
+  fastify.decorate("authenticate", authenticate);
+}
+
+// ❌ 不要在这里写 fastify.register(jwt, ...)
+
+export default fp(authPlugin);
